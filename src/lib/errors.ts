@@ -1,7 +1,13 @@
-export const ERROR_MESSAGES: Record<string, string> = {
+export const ERROR_MESSAGES = {
   INVALID_CREDENTIALS: 'Invalid username or password',
-};
+} as const;
 
-export function getErrorMessage(code: string): string {
-  return ERROR_MESSAGES[code] ?? "Something went wrong";
+export type ErrorCode = keyof typeof ERROR_MESSAGES;
+
+export function getErrorMessage(code: unknown): string {
+  if (typeof code === 'string' && code in ERROR_MESSAGES) {
+    return ERROR_MESSAGES[code as ErrorCode];
+  }
+
+  return "Something went wrong";
 }
