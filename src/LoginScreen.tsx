@@ -1,26 +1,41 @@
 import { useState } from "react";
+import { getErrorMessage } from "./lib/errors";
 
 function LoginScreen() {
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setStatus('submitting');
 
-    const res = await fetch("http://localhost:8080/api/v1/auth/login", {
-      method: "POST",
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        username: username,
-        password: password,
+    try {
+      const res = await fetch("http://localhost:8080/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: username,
+          password: password,
+        })
       })
-    })
 
-    console.log(res.status, await res.text());
+      if (res.ok) {
+        setStatus('idle');
+      } else {
+        setStatus('error');
+        setMessage(getErrorMessage(await res.json()));
+      }
+
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setStatus('error');
+      setMessage(message);
+    }
   }
+
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
+  const [message, setMessage] = useState('');
 
   return (
     <>
@@ -37,6 +52,8 @@ function LoginScreen() {
 
         <button type="submit" value="Login">Login</button>
       </form>
+
+      <div>{message}</div>
     </>
   )
 }
