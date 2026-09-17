@@ -1,10 +1,21 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { getErrorMessage } from "./lib/errors";
+import "./LoginScreen.css";
+
+type Status = 'idle' | 'submitting' | 'error' | 'success';
 
 function LoginScreen() {
+  const navigate = useNavigate();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState<Status>('idle');
+  const [message, setMessage] = useState('');
+
   const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     setStatus('submitting');
+    setMessage('');
 
     try {
       const res = await fetch("http://localhost:8080/api/v1/auth/login", {
@@ -19,7 +30,9 @@ function LoginScreen() {
       })
 
       if (res.ok) {
-        setStatus('idle');
+        setStatus('success');
+        setMessage('Login successful, redirecting…');
+        setTimeout(() => navigate('/'), 3000);
       } else {
         setStatus('error');
         setMessage(getErrorMessage(await res.json()));
@@ -32,29 +45,51 @@ function LoginScreen() {
     }
   }
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle')
-  const [message, setMessage] = useState('');
-
   return (
-    <>
-      <div>{status}</div>
-      <form method="POST" onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="username">Email</label>
-          <input type="text" id="username" name="username" value={username} onChange={(e) => setUsername(e.target.value)} />
-        </div>
-        <div>
-          <label htmlFor="password">Password</label>
-          <input type="password" id="password" name="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        </div>
+    <div className="login-page">
+      <div className="login-card">
+        <h2 className="login-card__heading">Chokusen Login</h2>
 
-        <button type="submit" value="Login">Login</button>
-      </form>
+        {status !== 'idle' && (
+          <div className="login-card__status">{status}</div>
+        )}
 
-      <div>{message}</div>
-    </>
+        <form className="login-card__form" method="POST" onSubmit={handleSubmit}>
+          <div className="login-card__field">
+            <label className="login-card__label" htmlFor="username">Username</label>
+            <input
+              className="login-card__input"
+              type="text"
+              id="username"
+              name="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div className="login-card__field">
+            <label className="login-card__label" htmlFor="password">Password</label>
+            <input
+              className="login-card__input"
+              type="password"
+              id="password"
+              name="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+
+          <button className="login-card__button" type="submit" disabled={status === 'submitting'}>
+            Login
+          </button>
+        </form>
+
+        {message && (
+          <div className={`login-card__message login-card__message--${status === 'success' ? 'success' : 'error'}`}>
+            {message}
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
