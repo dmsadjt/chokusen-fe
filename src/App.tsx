@@ -3,6 +3,7 @@ import './App.css'
 import HealthCheck from './HealthCheck'
 import HomeScreen from './HomeScreen'
 import LoginScreen from './LoginScreen'
+import RegisterScreen from './RegisterScreen'
 import ThemeToggle from './ThemeToggle'
 import { PublicOnly, RequireAuth } from './auth/RouteGuards'
 
@@ -13,6 +14,7 @@ function App() {
       <Routes>
         <Route path="/" element={<RequireAuth><HomeScreen /></RequireAuth>} />
         <Route path="/login" element={<PublicOnly><LoginScreen /></PublicOnly>} />
+        <Route path="/register" element={<PublicOnly><RegisterScreen /></PublicOnly>} />
         <Route path="/health" element={<HealthCheck />} />
       </Routes>
     </>

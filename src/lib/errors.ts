@@ -11,3 +11,12 @@ export function getErrorMessage(code: unknown): string {
 
   return "Something went wrong";
 }
+
+export function getApiErrorMessage(body: unknown): string {
+  if (typeof body === 'object' && body !== null && 'message' in body) {
+    const { message } = body as { message: unknown };
+    if (typeof message === 'string' && message) return message;
+  }
+
+  return getErrorMessage(body);
+}

@@ -50,7 +50,7 @@
 
 #root {
   width: 100%;
-  min-height: 100svh;
+  height: 100svh;
   text-align: center;
   display: flex;
   flex-direction: column;

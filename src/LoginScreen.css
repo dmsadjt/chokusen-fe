@@ -91,6 +91,23 @@
   margin-bottom: 16px;
 }
 
+.login-card__footer {
+  font-size: 13px;
+  color: var(--text);
+  margin: 16px 0 0;
+  text-align: left;
+}
+
+.login-card__footer a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-card__footer a:hover {
+  text-decoration: underline;
+}
+
 .login-card__message {
   font-size: 13px;
   margin-top: 16px;

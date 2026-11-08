@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "./auth/useAuth";
 import { API_BASE } from "./lib/api";
 import { getErrorMessage } from "./lib/errors";
@@ -91,6 +92,10 @@ function LoginScreen() {
             {message}
           </div>
         )}
+
+        <p className="login-card__footer">
+          No account yet? <Link to="/register">Register</Link>
+        </p>
       </div>
     </div>
   )

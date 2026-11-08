@@ -1,6 +1,7 @@
 .home {
   display: flex;
   flex: 1;
+  min-height: 0;
   align-items: stretch;
   text-align: left;
 }
@@ -8,6 +9,7 @@
 .home__content {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   align-items: stretch;
   justify-content: flex-start;

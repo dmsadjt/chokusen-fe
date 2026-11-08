@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Sidebar from './Sidebar';
 import ChannelPanel from './ChannelPanel';
 import MessagePanel from './MessagePanel';
+import { StompProvider } from './realtime/StompProvider';
 import './HomeScreen.css';
 
 function HomeScreen() {
@@ -14,25 +15,28 @@ function HomeScreen() {
   };
 
   return (
-    <div className="home">
-      <Sidebar selectedWorkspaceId={selectedWorkspaceId} onSelect={handleSelectWorkspace} />
-      {selectedWorkspaceId && (
-        <ChannelPanel
-          workspaceId={selectedWorkspaceId}
-          selectedChannelId={selectedChannelId}
-          onSelect={setSelectedChannelId}
-        />
-      )}
-      <main className="home__content">
-        {selectedChannelId ? (
-          <MessagePanel channelId={selectedChannelId} />
-        ) : (
-          <p className="home__placeholder">
-            {selectedWorkspaceId ? 'Select a channel to start chatting' : 'Select a workspace to get started'}
-          </p>
+    <StompProvider>
+      <div className="home">
+        <Sidebar selectedWorkspaceId={selectedWorkspaceId} onSelect={handleSelectWorkspace} />
+        {selectedWorkspaceId && (
+          <ChannelPanel
+            key={selectedWorkspaceId}
+            workspaceId={selectedWorkspaceId}
+            selectedChannelId={selectedChannelId}
+            onSelect={setSelectedChannelId}
+          />
         )}
-      </main>
-    </div>
+        <main className="home__content">
+          {selectedChannelId ? (
+            <MessagePanel key={selectedChannelId} channelId={selectedChannelId} />
+          ) : (
+            <p className="home__placeholder">
+              {selectedWorkspaceId ? 'Select a channel to start chatting' : 'Select a workspace to get started'}
+            </p>
+          )}
+        </main>
+      </div>
+    </StompProvider>
   )
 }
 

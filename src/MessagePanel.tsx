@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Client } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
-import { API_BASE, WS_URL } from './lib/api';
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { API_BASE } from './lib/api';
 import { useAuth } from './auth/useAuth';
-import type { ChannelMember, Message } from './types';
+import { useStomp } from './realtime/useStomp';
+import type { Message, ReadReceipt } from './types';
 import './MessagePanel.css';
 
 type Status = 'loading' | 'loaded' | 'error';
@@ -12,68 +11,97 @@ type MessagePanelProps = {
   channelId: string;
 };
 
+const time = (iso: string) => new Date(iso).getTime();
+
+function mergeMessages(first: Message[], second: Message[]): Message[] {
+  const byId = new Map<string, Message>();
+  for (const m of first) byId.set(m.messageId, m);
+  for (const m of second) byId.set(m.messageId, m);
+  return [...byId.values()].sort((a, b) => time(a.sentAt) - time(b.sentAt));
+}
+
+function summarizeNames(names: string[]): string {
+  const shown = names.slice(0, 3).join(', ');
+  return names.length > 3 ? `${shown} +${names.length - 3}` : shown;
+}
+
 function MessagePanel({ channelId }: MessagePanelProps) {
   const { user } = useAuth();
+  const { subscribe, publish } = useStomp();
+  const userId = user?.userId;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [draft, setDraft] = useState('');
-  const [usernames, setUsernames] = useState<Record<string, string>>({});
-  const clientRef = useRef<Client | null>(null);
+  const [reads, setReads] = useState<Record<string, ReadReceipt>>({});
+  const [dividerId, setDividerId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const markRead = useCallback(() => {
+    if (document.visibilityState !== 'visible') return;
+    fetch(`${API_BASE}/channels/${channelId}/read`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {
+      // read state is best-effort
+    });
+  }, [channelId]);
 
   useEffect(() => {
     let cancelled = false;
-    setStatus('loading');
-    setMessages([]);
-    setUsernames({});
 
-    fetch(`${API_BASE}/channels/${channelId}/members`, { credentials: 'include' })
-      .then((res) => (res.ok ? res.json() : []))
-      .then((members: ChannelMember[]) => {
-        if (!cancelled) {
-          setUsernames(
-            Object.fromEntries(members.map((m) => [m.userId, m.username]))
-          );
-        }
-      })
-      .catch(() => {
-        // best-effort — falls back to showing the raw sender id
-      });
+    const load = async () => {
+      try {
+        const [messagesRes, readsRes] = await Promise.all([
+          fetch(`${API_BASE}/channels/${channelId}/messages`, { credentials: 'include' }),
+          fetch(`${API_BASE}/channels/${channelId}/reads`, { credentials: 'include' }),
+        ]);
+        if (!messagesRes.ok) throw new Error('Failed to load messages');
 
-    fetch(`${API_BASE}/channels/${channelId}/messages`, { credentials: 'include' })
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to load messages');
-        return res.json();
-      })
-      .then((data: Message[]) => {
-        if (!cancelled) {
-          setMessages(data);
-          setStatus('loaded');
-        }
-      })
-      .catch(() => {
+        const history: Message[] = await messagesRes.json();
+        const receipts: ReadReceipt[] = readsRes.ok ? await readsRes.json() : [];
+        if (cancelled) return;
+
+        const receiptsByUser = Object.fromEntries(receipts.map((r) => [r.userId, r]));
+        const myReadAt = userId ? receiptsByUser[userId]?.readAt : undefined;
+        const firstUnread = history.find(
+          (m) => m.senderId !== userId && (!myReadAt || time(m.sentAt) > time(myReadAt))
+        );
+
+        setMessages((live) => mergeMessages(history, live));
+        setReads((live) => ({ ...receiptsByUser, ...live }));
+        setDividerId(firstUnread?.messageId ?? null);
+        setStatus('loaded');
+        markRead();
+      } catch {
         if (!cancelled) setStatus('error');
-      });
+      }
+    };
+    void load();
 
-    const client = new Client({
-      webSocketFactory: () => new SockJS(WS_URL),
-      reconnectDelay: 3000,
-      onConnect: () => {
-        client.subscribe(`/topic/channel.${channelId}`, (frame) => {
-          const incoming: Message = JSON.parse(frame.body);
-          setMessages((prev) => [...prev, incoming]);
-        });
-      },
+    const unsubscribeMessages = subscribe(`/topic/channel.${channelId}`, (body) => {
+      const incoming: Message = JSON.parse(body);
+      setMessages((prev) => mergeMessages(prev, [incoming]));
+      if (incoming.senderId !== userId) markRead();
     });
-    client.activate();
-    clientRef.current = client;
+
+    const unsubscribeReads = subscribe(`/topic/channel.${channelId}.reads`, (body) => {
+      const receipt: ReadReceipt = JSON.parse(body);
+      setReads((prev) => ({ ...prev, [receipt.userId]: receipt }));
+    });
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') markRead();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       cancelled = true;
-      void client.deactivate();
-      clientRef.current = null;
+      unsubscribeMessages();
+      unsubscribeReads();
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [channelId]);
+  }, [channelId, userId, subscribe, markRead]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,14 +110,19 @@ function MessagePanel({ channelId }: MessagePanelProps) {
   const handleSend = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = draft.trim();
-    if (!trimmed || !user || !clientRef.current?.connected) return;
+    if (!trimmed || !user) return;
 
-    clientRef.current.publish({
-      destination: `/app/chat.send/${channelId}`,
-      body: JSON.stringify({ content: trimmed }),
-    });
-    setDraft('');
+    if (publish(`/app/chat.send/${channelId}`, JSON.stringify({ content: trimmed }))) {
+      setDraft('');
+    }
   };
+
+  const lastOwn = [...messages].reverse().find((m) => m.senderId === userId);
+  const seenBy = lastOwn
+    ? Object.values(reads)
+        .filter((r) => r.userId !== userId && time(r.readAt) >= time(lastOwn.sentAt))
+        .map((r) => r.username)
+    : [];
 
   return (
     <div className="message-panel">
@@ -103,17 +136,27 @@ function MessagePanel({ channelId }: MessagePanelProps) {
         {status === 'loaded' && messages.length === 0 && (
           <p className="message-panel__hint">No messages yet — say hi</p>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.messageId}
-            className={`message-panel__bubble${msg.senderId === user?.userId ? ' message-panel__bubble--own' : ''}`}
-          >
-            <span className="message-panel__sender">
-              {msg.senderId === user?.userId ? 'You' : usernames[msg.senderId] ?? msg.senderId.slice(0, 8)}
-            </span>
-            <p className="message-panel__content">{msg.content}</p>
-          </div>
-        ))}
+        {messages.map((msg) => {
+          const own = msg.senderId === userId;
+          return (
+            <Fragment key={msg.messageId}>
+              {msg.messageId === dividerId && (
+                <div className="message-panel__divider">
+                  <span>New messages</span>
+                </div>
+              )}
+              <div className={`message-panel__bubble${own ? ' message-panel__bubble--own' : ''}`}>
+                <span className="message-panel__sender">
+                  {own ? 'You' : msg.senderUsername}
+                </span>
+                <p className="message-panel__content">{msg.content}</p>
+              </div>
+              {msg.messageId === lastOwn?.messageId && seenBy.length > 0 && (
+                <div className="message-panel__seen">Seen by {summarizeNames(seenBy)}</div>
+              )}
+            </Fragment>
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 

@@ -1,7 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useAuth } from './auth/useAuth';
 import { API_BASE } from './lib/api';
+import { useStomp } from './realtime/useStomp';
 import InviteMember from './InviteMember';
-import type { Channel } from './types';
+import type { Channel, Message, UnreadCount } from './types';
 import './ChannelPanel.css';
 
 type Status = 'loading' | 'loaded' | 'error';
@@ -13,15 +15,24 @@ type ChannelPanelProps = {
 };
 
 function ChannelPanel({ workspaceId, selectedChannelId, onSelect }: ChannelPanelProps) {
+  const { user } = useAuth();
+  const { subscribe } = useStomp();
+  const userId = user?.userId;
+
   const [channels, setChannels] = useState<Channel[]>([]);
   const [status, setStatus] = useState<Status>('loading');
   const [name, setName] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [unread, setUnread] = useState<Record<string, number>>({});
+  const selectedRef = useRef(selectedChannelId);
+
+  useEffect(() => {
+    selectedRef.current = selectedChannelId;
+  }, [selectedChannelId]);
 
   const loadChannels = () => {
-    setStatus('loading');
     return fetch(`${API_BASE}/workspaces/${workspaceId}/channels`, {
       credentials: 'include',
     })
@@ -39,12 +50,50 @@ function ChannelPanel({ workspaceId, selectedChannelId, onSelect }: ChannelPanel
   };
 
   useEffect(() => {
-    setName('');
-    setIsPrivate(false);
-    setCreateError('');
     void loadChannels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(`${API_BASE}/workspaces/${workspaceId}/unread`, { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: UnreadCount[]) => {
+        if (!cancelled) {
+          setUnread(Object.fromEntries(list.map((u) => [u.channelId, u.unreadCount])));
+        }
+      })
+      .catch(() => {
+        // badges are best-effort; the channel list still works without them
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (status !== 'loaded') return;
+
+    const unsubscribers = channels.map((ch) =>
+      subscribe(`/topic/channel.${ch.channelId}`, (body) => {
+        const msg: Message = JSON.parse(body);
+        if (msg.senderId === userId || msg.channelId === selectedRef.current) return;
+        setUnread((prev) => ({
+          ...prev,
+          [msg.channelId]: (prev[msg.channelId] ?? 0) + 1,
+        }));
+      })
+    );
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [channels, status, subscribe, userId]);
+
+  const handleSelect = (channelId: string) => {
+    setUnread((prev) => ({ ...prev, [channelId]: 0 }));
+    onSelect(channelId);
+  };
 
   const handleCreate = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -91,18 +140,26 @@ function ChannelPanel({ workspaceId, selectedChannelId, onSelect }: ChannelPanel
       )}
       {status === 'loaded' && channels.length > 0 && (
         <ul className="channel-panel__list">
-          {channels.map((ch) => (
-            <li key={ch.channelId}>
-              <button
-                type="button"
-                className={`channel-panel__item${ch.channelId === selectedChannelId ? ' channel-panel__item--active' : ''}`}
-                onClick={() => onSelect(ch.channelId)}
-              >
-                <span className="channel-panel__hash">{ch.isPrivate ? '🔒' : '#'}</span>
-                {ch.channelName}
-              </button>
-            </li>
-          ))}
+          {channels.map((ch) => {
+            const count = unread[ch.channelId] ?? 0;
+            return (
+              <li key={ch.channelId}>
+                <button
+                  type="button"
+                  className={`channel-panel__item${ch.channelId === selectedChannelId ? ' channel-panel__item--active' : ''}${count > 0 ? ' channel-panel__item--unread' : ''}`}
+                  onClick={() => handleSelect(ch.channelId)}
+                >
+                  <span className="channel-panel__hash">{ch.isPrivate ? '🔒' : '#'}</span>
+                  <span className="channel-panel__name">{ch.channelName}</span>
+                  {count > 0 && (
+                    <span className="channel-panel__badge" aria-label={`${count} unread`}>
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
