@@ -1,0 +1,128 @@
+.channel-panel {
+  width: 200px;
+  flex: none;
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.channel-panel__heading {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  margin: 0 0 12px;
+}
+
+.channel-panel__hint {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0;
+}
+
+.channel-panel__hint--error {
+  color: var(--error);
+}
+
+.channel-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.channel-panel__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: var(--text-h);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.channel-panel__item:hover {
+  background: var(--accent-bg);
+}
+
+.channel-panel__item--active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.channel-panel__hash {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.channel-panel__item--active .channel-panel__hash {
+  color: var(--accent);
+}
+
+.channel-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.channel-panel__input {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text-h);
+  box-sizing: border-box;
+}
+
+.channel-panel__input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.channel-panel__checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.channel-panel__add-button {
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  cursor: pointer;
+  transition: border-color 0.2s, opacity 0.2s;
+}
+
+.channel-panel__add-button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.channel-panel__add-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

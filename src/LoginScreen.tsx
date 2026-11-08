@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useAuth } from "./auth/useAuth";
+import { API_BASE } from "./lib/api";
 import { getErrorMessage } from "./lib/errors";
 import "./LoginScreen.css";
 
 type Status = 'idle' | 'submitting' | 'error' | 'success';
 
 function LoginScreen() {
-  const navigate = useNavigate();
+  const { refresh } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [status, setStatus] = useState<Status>('idle');
@@ -18,8 +19,9 @@ function LoginScreen() {
     setMessage('');
 
     try {
-      const res = await fetch("http://localhost:8080/api/v1/auth/login", {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -32,7 +34,8 @@ function LoginScreen() {
       if (res.ok) {
         setStatus('success');
         setMessage('Login successful, redirecting…');
-        setTimeout(() => navigate('/'), 3000);
+        // refresh() flips auth state, so PublicOnly redirects to '/' once it resolves
+        setTimeout(() => void refresh(), 3000);
       } else {
         setStatus('error');
         setMessage(getErrorMessage(await res.json()));
